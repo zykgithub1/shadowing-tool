@@ -121,7 +121,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
   <div class="guide-toggle" onclick="document.getElementById('guide').classList.toggle('show')">📖 语音质量优化指南（点击展开）</div>
   <div class="guide" id="guide">
     <h4>如何获得最好的语音质量？</h4>
-    <p><b>推荐：在线AI语音（需联网）</b><br>首次使用会弹出Puter登录框，用Google账号一键登录即可，登录一次浏览器会记住。语音质量接近真人，完全免费。</p>
+    <p><b>推荐：在线AI语音（需联网）</b><br>使用已部署的 Cloudflare Worker（Edge 神经网络 TTS），无需登录第三方账号。若 Worker 上设置了 API Key，请在页面脚本里填写 <code>TTS_API_KEY</code>。</p>
     <p><b>备选：优化本地语音包</b><br>
     Android: <code>设置 → 无障碍 → 文字转语音(TTS)输出</code>，选Google引擎，下载高质量英文语音包。<br>
     iPhone: 系统自带英文语音质量不错，无需额外设置。</p>
@@ -156,16 +156,63 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 
 <div class="bar"><div class="bd" id="bd"></div><span id="stxt">准备就绪</span></div>
 
-<script src="https://js.puter.com/v2/"></script>
 <script>
-let S=[],ci=0,playing=false,paused=false,ptimer=null,cAudio=null;
+/** 你的 Cloudflare Worker 根地址（不要末尾斜杠） */
+const TTS_API_BASE='https://tts-edge-shadowing.chriszyk123.workers.dev';
+/** 若 Worker 里配置了 API_KEY，在此填写（留空则不带 Authorization） */
+const TTS_API_KEY='';
+
+let S=[],ci=0,playing=false,paused=false,cAudio=null,lastBlobUrl=null;
+let loopGeneration=0,endSpeak=null;
 let src='puter',puterOK=false;
 const synth=window.speechSynthesis;let bv=[];
 const $=id=>document.getElementById(id);
 
-(function(){let n=0;const iv=setInterval(()=>{n++;if(typeof puter!=='undefined'&&puter.ai&&puter.ai.txt2speech){clearInterval(iv);puterOK=true;$('ebar').className='engine-bar online';$('etxt').textContent='✅ 在线AI语音就绪 · 首次使用需登录Puter（支持Google一键登录）';$('btnAI').disabled=false;fillVoices()}else if(n>50){clearInterval(iv);puterOK=false;$('ebar').className='engine-bar offline';$('etxt').textContent='⚠️ 在线语音不可用 · 已切换到本地语音';$('btnAI').disabled=true;switchTTS('browser')}},200)})();
+function ttsHeadersJson(){
+  const h={'Content-Type':'application/json'};
+  if(TTS_API_KEY) h['Authorization']='Bearer '+TTS_API_KEY;
+  return h;
+}
+(async function checkEdgeTts(){
+  try{
+    const r=await fetch(TTS_API_BASE+'/v1/audio/speech',{
+      method:'POST',
+      headers:ttsHeadersJson(),
+      body:JSON.stringify({input:'hi',voice:'en-US-AriaNeural',speed:1})
+    });
+    if(r.ok){
+      puterOK=true;
+      $('ebar').className='engine-bar online';
+      $('etxt').textContent='✅ 在线AI语音就绪 · Edge 神经语音（Worker）';
+      $('btnAI').disabled=false;
+      fillVoices();
+      return;
+    }
+    if(r.status===401){
+      $('ebar').className='engine-bar offline';
+      $('etxt').textContent='⚠️ Worker 需要 API Key：在页面里设置 TTS_API_KEY 或关闭 Worker 的鉴权';
+      $('btnAI').disabled=true;
+      switchTTS('browser');
+      return;
+    }
+    throw new Error(String(r.status));
+  }catch(e){
+    puterOK=false;
+    $('ebar').className='engine-bar offline';
+    $('etxt').textContent='⚠️ 无法连接 TTS Worker · 已切换到本地语音';
+    $('btnAI').disabled=true;
+    switchTTS('browser');
+  }
+})();
 
-const AV=[{v:'Amy',l:'Amy · 美式女声'},{v:'Matthew',l:'Matthew · 美式男声'},{v:'Brian',l:'Brian · 英式男声'},{v:'Emma',l:'Emma · 英式女声'},{v:'Joanna',l:'Joanna · 美式女声'},{v:'Joey',l:'Joey · 美式男声'}];
+const AV=[
+  {v:'en-US-AriaNeural',l:'Aria · 美式女声'},
+  {v:'en-US-GuyNeural',l:'Guy · 美式男声'},
+  {v:'en-GB-RyanNeural',l:'Ryan · 英式男声'},
+  {v:'en-GB-SoniaNeural',l:'Sonia · 英式女声'},
+  {v:'en-US-JennyNeural',l:'Jenny · 美式女声'},
+  {v:'en-US-DavisNeural',l:'Davis · 美式男声'}
+];
 function fillVoices(){const s=$('voiceSelect');s.innerHTML='';if(src==='puter'){AV.forEach(v=>{const o=document.createElement('option');o.value=v.v;o.textContent=v.l;s.appendChild(o)})}else{bv=synth.getVoices().filter(v=>v.lang.startsWith('en'));const pf=['Google','Microsoft','Samantha','Daniel'];bv.sort((a,b)=>(pf.some(p=>a.name.includes(p))?-1:1)-(pf.some(p=>b.name.includes(p))?-1:1));bv.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${v.name} (${v.lang})`;s.appendChild(o)});if(!bv.length){const o=document.createElement('option');o.textContent='未检测到英文语音';s.appendChild(o)}}}
 synth.onvoiceschanged=()=>{if(src==='browser')fillVoices()};
 function switchTTS(t){if(t==='puter'&&!puterOK)return;src=t;$('btnAI').classList.toggle('on',t==='puter');$('btnLocal').classList.toggle('on',t==='browser');fillVoices()}
@@ -248,18 +295,170 @@ function setSt(t,c){$('stxt').textContent=t;const d=$('bd');d.className='bd';if(
 function hi(i,st){document.querySelectorAll('.si').forEach(e=>{e.classList.remove('active','wait')});const e=document.getElementById('s'+i);if(e){e.classList.add(st);e.scrollIntoView({behavior:'smooth',block:'center'})}}
 function markDone(i){const e=document.getElementById('s'+i);if(e)e.classList.add('done')}
 
-function speakPuter(text){return new Promise(async(res)=>{try{const v=$('voiceSelect').value;const audio=await puter.ai.txt2speech(text,{voice:v,engine:'neural',language:'en-US'});cAudio=audio;audio.playbackRate=parseFloat($('rSpeed').value);audio.onended=()=>{cAudio=null;res()};audio.onerror=()=>{cAudio=null;res()};audio.play().catch(()=>{cAudio=null;res()})}catch(e){console.error('AI TTS:',e);cAudio=null;await speakLocal(text);res()}})}
-function speakLocal(text){return new Promise((res)=>{synth.cancel();setTimeout(()=>{const u=new SpeechSynthesisUtterance(text);const idx=$('voiceSelect').value;if(bv[idx])u.voice=bv[idx];u.rate=parseFloat($('rSpeed').value);u.pitch=1;u.onend=()=>res();u.onerror=()=>res();synth.speak(u)},100)})}
+function releaseBlobAudio(){if(lastBlobUrl){try{URL.revokeObjectURL(lastBlobUrl)}catch(e){}lastBlobUrl=null}}
+function interruptPlayback(){
+  if(cAudio){cAudio.pause();cAudio=null}
+  releaseBlobAudio();
+  synth.cancel();
+  if(endSpeak){const f=endSpeak;endSpeak=null;f()}
+}
+function speakPuter(text){
+  return new Promise(async(res)=>{
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      endSpeak=null;
+      releaseBlobAudio();
+      cAudio=null;
+      res();
+    };
+    endSpeak=finish;
+    try{
+      const voice=$('voiceSelect').value;
+      const speed=parseFloat($('rSpeed').value);
+      const r=await fetch(TTS_API_BASE+'/v1/audio/speech',{
+        method:'POST',
+        headers:ttsHeadersJson(),
+        body:JSON.stringify({input:text,voice,speed})
+      });
+      if(!r.ok){
+        const err=await r.text();
+        throw new Error(err||r.status);
+      }
+      releaseBlobAudio();
+      const blob=await r.blob();
+      if(endSpeak!==finish)return;
+      lastBlobUrl=URL.createObjectURL(blob);
+      const audio=new Audio(lastBlobUrl);
+      cAudio=audio;
+      audio.playbackRate=1;
+      audio.onended=finish;
+      audio.onerror=finish;
+      audio.play().catch(finish);
+    }catch(e){
+      console.error('Worker TTS:',e);
+      releaseBlobAudio();
+      cAudio=null;
+      endSpeak=null;
+      await speakLocal(text);
+      res();
+    }
+  });
+}
+function speakLocal(text){
+  return new Promise((res)=>{
+    let finished=false;
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      endSpeak=null;
+      res();
+    };
+    endSpeak=finish;
+    synth.cancel();
+    setTimeout(()=>{
+      const u=new SpeechSynthesisUtterance(text);
+      const idx=$('voiceSelect').value;
+      if(bv[idx])u.voice=bv[idx];
+      u.rate=parseFloat($('rSpeed').value);
+      u.pitch=1;
+      u.onend=finish;
+      u.onerror=finish;
+      synth.speak(u);
+    },100);
+  });
+}
 function speak(t){return(src==='puter'&&puterOK)?speakPuter(t):speakLocal(t)}
-function wait(s){return new Promise(r=>{ptimer=setTimeout(r,s*1000)})}
+/** 跟读停顿：可暂停=倒计时冻结；停止/跳转时靠 playing 与 gen 退出 */
+async function wait(pdSeconds,gen){
+  let remaining=pdSeconds*1000;
+  while(remaining>0&&playing){
+    if(gen!==loopGeneration)return;
+    while(paused&&playing){
+      await new Promise(r=>setTimeout(r,200));
+      if(gen!==loopGeneration)return;
+    }
+    if(!playing||gen!==loopGeneration)return;
+    const step=Math.min(remaining,200);
+    await new Promise(r=>setTimeout(r,step));
+    remaining-=step;
+  }
+}
 
-async function loop(){const pd=parseFloat($('rPause').value),rc=parseInt($('rRepeat').value);while(ci<S.length&&playing){while(paused&&playing)await new Promise(r=>setTimeout(r,200));if(!playing)break;for(let rep=0;rep<rc&&playing;rep++){while(paused&&playing)await new Promise(r=>setTimeout(r,200));if(!playing)break;document.querySelectorAll('.rep-tag').forEach(b=>b.remove());if(rc>1){const e=document.getElementById('s'+ci);if(e){const b=document.createElement('span');b.className='rep-tag';b.textContent=`${rep+1}/${rc}`;e.appendChild(b)}}hi(ci,'active');setSt(`朗读第 ${ci+1} 句${rc>1?` · 第${rep+1}遍`:''}`,src==='puter'?'loading':'playing');upProg();await speak(S[ci]);if(!playing)break;hi(ci,'wait');setSt('请跟读这句 ⏳','waiting');await wait(pd);if(!playing)break}if(!playing)break;document.querySelectorAll('.rep-tag').forEach(b=>b.remove());markDone(ci);ci++}if(playing&&ci>=S.length){setSt('✅ 全部完成！','');finish()}}
+async function loop(){
+  const gen=loopGeneration;
+  const pd=parseFloat($('rPause').value);
+  const rc=parseInt($('rRepeat').value);
+  while(ci<S.length&&playing){
+    if(gen!==loopGeneration)return;
+    while(paused&&playing){
+      await new Promise(r=>setTimeout(r,200));
+      if(gen!==loopGeneration)return;
+    }
+    if(!playing)break;
+    if(gen!==loopGeneration)return;
+    for(let rep=0;rep<rc&&playing;rep++){
+      if(gen!==loopGeneration)return;
+      while(paused&&playing){
+        await new Promise(r=>setTimeout(r,200));
+        if(gen!==loopGeneration)return;
+      }
+      if(!playing)break;
+      document.querySelectorAll('.rep-tag').forEach(b=>b.remove());
+      if(rc>1){
+        const e=document.getElementById('s'+ci);
+        if(e){
+          const b=document.createElement('span');
+          b.className='rep-tag';
+          b.textContent=`${rep+1}/${rc}`;
+          e.appendChild(b);
+        }
+      }
+      hi(ci,'active');
+      setSt(`朗读第 ${ci+1} 句${rc>1?` · 第${rep+1}遍`:''}`,src==='puter'?'loading':'playing');
+      upProg();
+      await speak(S[ci]);
+      if(!playing||gen!==loopGeneration)break;
+      hi(ci,'wait');
+      setSt('请跟读这句 ⏳','waiting');
+      await wait(pd,gen);
+      if(!playing||gen!==loopGeneration)break;
+    }
+    if(!playing||gen!==loopGeneration)break;
+    document.querySelectorAll('.rep-tag').forEach(b=>b.remove());
+    markDone(ci);
+    ci++;
+  }
+  if(playing&&ci>=S.length&&gen===loopGeneration){
+    setSt('✅ 全部完成！','');
+    finish();
+  }
+}
 
-function start(){const t=$('textInput').value.trim();if(!t)return;S=splitS(t);if(!S.length)return;ci=0;playing=true;paused=false;buildList();$('panel').classList.remove('hidden');$('btnStart').classList.add('hidden');$('btnPause').classList.remove('hidden');$('btnStop').classList.remove('hidden');loop()}
-function togglePause(){paused=!paused;if(paused){if(cAudio)cAudio.pause();if(src==='browser')synth.pause();$('btnPause').textContent='▶ 继续';setSt('已暂停','');if(ptimer)clearTimeout(ptimer)}else{if(cAudio)cAudio.play();if(src==='browser')synth.resume();$('btnPause').textContent='⏸ 暂停'}}
-function stop(){playing=false;paused=false;if(cAudio){cAudio.pause();cAudio=null}synth.cancel();if(ptimer)clearTimeout(ptimer);finish();setSt('已停止','')}
+function start(){const t=$('textInput').value.trim();if(!t)return;S=splitS(t);if(!S.length)return;loopGeneration++;interruptPlayback();ci=0;playing=true;paused=false;buildList();$('panel').classList.remove('hidden');$('btnStart').classList.add('hidden');$('btnPause').classList.remove('hidden');$('btnStop').classList.remove('hidden');$('btnPause').textContent='⏸ 暂停';loop()}
+function togglePause(){paused=!paused;if(paused){if(cAudio)cAudio.pause();if(src==='browser')synth.pause();$('btnPause').textContent='▶ 继续';setSt('已暂停','')}else{if(cAudio)cAudio.play();if(src==='browser')synth.resume();$('btnPause').textContent='⏸ 暂停'}}
+function stop(){playing=false;paused=false;interruptPlayback();finish();setSt('已停止','')}
 function finish(){$('btnStart').classList.remove('hidden');$('btnStart').textContent='▶ 重新开始';$('btnPause').classList.add('hidden');$('btnStop').classList.add('hidden');$('btnPause').textContent='⏸ 暂停'}
-function jumpTo(i){if(!playing)return;if(cAudio){cAudio.pause();cAudio=null}synth.cancel();if(ptimer)clearTimeout(ptimer);ci=i;for(let j=i;j<S.length;j++){const e=document.getElementById('s'+j);if(e)e.classList.remove('done')}}
+function jumpTo(i){
+  if(!S.length||i<0||i>=S.length)return;
+  loopGeneration++;
+  interruptPlayback();
+  paused=false;
+  ci=i;
+  for(let j=i;j<S.length;j++){
+    const e=document.getElementById('s'+j);
+    if(e)e.classList.remove('done');
+  }
+  if(!playing){
+    playing=true;
+    $('btnStart').classList.add('hidden');
+    $('btnPause').classList.remove('hidden');
+    $('btnStop').classList.remove('hidden');
+    $('btnPause').textContent='⏸ 暂停';
+  }
+  loop();
+}
 
 fillVoices();
 </script>
