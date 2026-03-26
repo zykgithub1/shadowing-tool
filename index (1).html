@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ShadowEcho - 影子跟读练习器</title>
+<meta name="description" content="免费开源的英语影子跟读工具，逐句朗读+停顿，支持在线AI高质量语音">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0b0e14;--card:#141820;--card2:#1b2030;--border:#252d3f;
+  --text:#d5dae6;--text2:#6b7a96;--text3:#3d4a62;
+  --mint:#45e6b0;--mint-glow:rgba(69,230,176,.12);--mint-dim:rgba(69,230,176,.06);
+  --peach:#ff9466;--peach-glow:rgba(255,148,102,.15);
+  --sky:#5bb8f5;--sky-glow:rgba(91,184,245,.12);
+  --red:#f06;--red-glow:rgba(255,0,102,.1);
+  --radius:14px;--radius-sm:10px;
+}
+html{-webkit-tap-highlight-color:transparent}
+body{font-family:'DM Sans','Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;line-height:1.6;overflow-x:hidden}
+body::before{content:'';position:fixed;top:-40%;left:-20%;width:80%;height:80%;background:radial-gradient(ellipse,rgba(69,230,176,.03),transparent 70%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-30%;right:-20%;width:70%;height:70%;background:radial-gradient(ellipse,rgba(91,184,245,.02),transparent 70%);pointer-events:none;z-index:0}
+
+.app{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:20px 16px 120px}
+
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo-icon{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--mint),var(--sky));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.logo h1{font-size:20px;font-weight:700;letter-spacing:-.3px;color:var(--text)}
+.logo h1 span{color:var(--mint)}
+.subtitle{color:var(--text2);font-size:12px;margin-bottom:24px;padding-left:46px;font-weight:300}
+
+.engine-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:12px;font-weight:500;transition:.3s}
+.engine-bar.checking{background:rgba(255,200,60,.08);color:#ffc83c;border:1px solid rgba(255,200,60,.15)}
+.engine-bar.online{background:var(--mint-dim);color:var(--mint);border:1px solid rgba(69,230,176,.12)}
+.engine-bar.offline{background:var(--red-glow);color:#f06;border:1px solid rgba(255,0,102,.12)}
+.engine-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.engine-bar.checking .engine-dot{background:#ffc83c;animation:blink .8s infinite}
+.engine-bar.online .engine-dot{background:var(--mint)}
+.engine-bar.offline .engine-dot{background:#f06}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+.toggle-row{display:flex;gap:6px;margin-bottom:16px}
+.toggle-btn{flex:1;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text2);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;transition:.2s;text-align:center}
+.toggle-btn.on{background:var(--mint-glow);color:var(--mint);border-color:rgba(69,230,176,.25)}
+.toggle-btn:disabled{opacity:.35;cursor:not-allowed}
+
+.input-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.input-card label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500}
+textarea{width:100%;min-height:120px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;line-height:1.9;padding:12px;resize:vertical;outline:none;transition:border .2s}
+textarea:focus{border-color:var(--mint)}
+textarea::placeholder{color:var(--text3)}
+
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.ctrl{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 12px}
+.ctrl label{display:block;font-size:10px;color:var(--text2);margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.8px}
+select{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;outline:none;-webkit-appearance:none}
+input[type="range"]{width:100%;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--border);border:none;margin-top:6px;outline:none}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--mint);cursor:pointer;box-shadow:0 0 10px var(--mint-glow)}
+.rv{text-align:center;font-family:'DM Mono',monospace;font-size:12px;color:var(--mint);margin-top:3px}
+
+.actions{display:flex;gap:8px;margin-bottom:18px}
+.btn{flex:1;padding:12px 14px;border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-go{background:var(--mint);color:var(--bg)}
+.btn-go:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-go:active{transform:translateY(0)}
+.btn-pause{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-stop{background:var(--red-glow);color:var(--red);border:1px solid rgba(255,0,102,.2)}
+
+.sent-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.sent-head{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.sent-head h3{font-size:13px;font-weight:600;color:var(--text2)}
+.prog{font-family:'DM Mono',monospace;font-size:12px;color:var(--mint)}
+.sent-list{padding:6px;max-height:420px;overflow-y:auto}
+.sent-list::-webkit-scrollbar{width:4px}
+.sent-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.si{padding:10px 12px;border-radius:8px;margin-bottom:3px;font-size:14px;line-height:1.7;transition:.25s;cursor:pointer;display:flex;align-items:flex-start;gap:10px;border-left:3px solid transparent}
+.si:hover{background:var(--card2)}
+.si .num{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);min-width:20px;padding-top:3px;text-align:right}
+.si .txt{flex:1}
+.si.active{background:var(--peach-glow);border-left-color:var(--peach)}
+.si.active .num{color:var(--peach)}
+.si.done{background:var(--mint-dim);opacity:.6}
+.si.done .num{color:var(--mint)}
+.si.wait{background:var(--sky-glow);border-left-color:var(--sky)}
+.si.wait .num{color:var(--sky)}
+.rep-tag{font-family:'DM Mono',monospace;font-size:10px;color:var(--sky);background:var(--sky-glow);padding:1px 7px;border-radius:5px;margin-left:auto;white-space:nowrap}
+
+.bar{position:fixed;bottom:0;left:0;right:0;background:rgba(11,14,20,.92);border-top:1px solid var(--border);padding:11px 20px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text2);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:10}
+.bd{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.bd.playing{background:var(--peach);animation:pulse 1s infinite}
+.bd.waiting{background:var(--sky);animation:pulse 1.8s infinite}
+.bd.loading{background:#ffc83c;animation:pulse .5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+
+.guide-toggle{font-size:11px;color:var(--text3);text-align:center;margin-bottom:16px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.guide-toggle:hover{color:var(--text2)}
+.guide{display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;font-size:12px;color:var(--text2);line-height:1.8}
+.guide.show{display:block}
+.guide h4{color:var(--mint);font-size:13px;margin-bottom:8px}
+.guide p{margin-bottom:8px}
+.guide code{background:var(--card2);padding:1px 5px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;color:var(--peach)}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="logo"><div class="logo-icon">🎧</div><h1>Shadow<span>Echo</span></h1></div>
+  <p class="subtitle">粘贴英文 → 逐句朗读 → 停顿跟读 · 开源免费</p>
+
+  <div class="engine-bar checking" id="ebar"><div class="engine-dot"></div><span id="etxt">正在检测在线AI语音...</span></div>
+
+  <div class="toggle-row">
+    <button class="toggle-btn on" id="btnAI" onclick="switchTTS('puter')">☁️ 在线AI语音</button>
+    <button class="toggle-btn" id="btnLocal" onclick="switchTTS('browser')">📱 本地语音</button>
+  </div>
+
+  <div class="guide-toggle" onclick="document.getElementById('guide').classList.toggle('show')">📖 语音质量优化指南（点击展开）</div>
+  <div class="guide" id="guide">
+    <h4>如何获得最好的语音质量？</h4>
+    <p><b>推荐：在线AI语音（需联网）</b><br>首次使用会弹出Puter登录框，用Google账号一键登录即可，登录一次浏览器会记住。语音质量接近真人，完全免费。</p>
+    <p><b>备选：优化本地语音包</b><br>
+    Android: <code>设置 → 无障碍 → 文字转语音(TTS)输出</code>，选Google引擎，下载高质量英文语音包。<br>
+    iPhone: 系统自带英文语音质量不错，无需额外设置。</p>
+    <p><b>进阶：安装微软语音引擎</b><br>
+    GitHub搜索 <code>tts-server-android</code>，安装后系统设置切换默认TTS引擎，可获得微软Edge同款语音（需联网）。</p>
+  </div>
+
+  <div class="input-card">
+    <label>📝 粘贴英文文本</label>
+    <textarea id="textInput" placeholder="Paste your English text here...&#10;&#10;从腾讯文档或任意地方复制文本粘贴到这里，&#10;工具自动按句拆分，逐句朗读并停顿等你跟读。"></textarea>
+  </div>
+
+  <div class="ctrl-grid">
+    <div class="ctrl"><label>语音 Voice</label><select id="voiceSelect"></select></div>
+    <div class="ctrl"><label>停顿 Pause</label><input type="range" id="rPause" min="1" max="10" step=".5" value="3"><div class="rv" id="vPause">3.0s</div></div>
+    <div class="ctrl"><label>重复 Repeat</label><input type="range" id="rRepeat" min="1" max="5" step="1" value="1"><div class="rv" id="vRepeat">1次</div></div>
+    <div class="ctrl"><label>语速 Speed</label><input type="range" id="rSpeed" min=".5" max="1.5" step=".1" value=".9"><div class="rv" id="vSpeed">0.9x</div></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-go" id="btnStart" onclick="start()">▶ 开始朗读</button>
+    <button class="btn btn-pause hidden" id="btnPause" onclick="togglePause()">⏸ 暂停</button>
+    <button class="btn btn-stop hidden" id="btnStop" onclick="stop()">⏹ 停止</button>
+  </div>
+
+  <div class="sent-panel hidden" id="panel">
+    <div class="sent-head"><h3>句子列表</h3><span class="prog" id="prog">0/0</span></div>
+    <div class="sent-list" id="slist"></div>
+  </div>
+</div>
+
+<div class="bar"><div class="bd" id="bd"></div><span id="stxt">准备就绪</span></div>
+
+<script src="https://js.puter.com/v2/"></script>
+<script>
+let S=[],ci=0,playing=false,paused=false,ptimer=null,cAudio=null;
+let src='puter',puterOK=false;
+const synth=window.speechSynthesis;let bv=[];
+const $=id=>document.getElementById(id);
+
+(function(){let n=0;const iv=setInterval(()=>{n++;if(typeof puter!=='undefined'&&puter.ai&&puter.ai.txt2speech){clearInterval(iv);puterOK=true;$('ebar').className='engine-bar online';$('etxt').textContent='✅ 在线AI语音就绪 · 首次使用需登录Puter（支持Google一键登录）';$('btnAI').disabled=false;fillVoices()}else if(n>50){clearInterval(iv);puterOK=false;$('ebar').className='engine-bar offline';$('etxt').textContent='⚠️ 在线语音不可用 · 已切换到本地语音';$('btnAI').disabled=true;switchTTS('browser')}},200)})();
+
+const AV=[{v:'Amy',l:'Amy · 美式女声'},{v:'Matthew',l:'Matthew · 美式男声'},{v:'Brian',l:'Brian · 英式男声'},{v:'Emma',l:'Emma · 英式女声'},{v:'Joanna',l:'Joanna · 美式女声'},{v:'Joey',l:'Joey · 美式男声'}];
+function fillVoices(){const s=$('voiceSelect');s.innerHTML='';if(src==='puter'){AV.forEach(v=>{const o=document.createElement('option');o.value=v.v;o.textContent=v.l;s.appendChild(o)})}else{bv=synth.getVoices().filter(v=>v.lang.startsWith('en'));const pf=['Google','Microsoft','Samantha','Daniel'];bv.sort((a,b)=>(pf.some(p=>a.name.includes(p))?-1:1)-(pf.some(p=>b.name.includes(p))?-1:1));bv.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${v.name} (${v.lang})`;s.appendChild(o)});if(!bv.length){const o=document.createElement('option');o.textContent='未检测到英文语音';s.appendChild(o)}}}
+synth.onvoiceschanged=()=>{if(src==='browser')fillVoices()};
+function switchTTS(t){if(t==='puter'&&!puterOK)return;src=t;$('btnAI').classList.toggle('on',t==='puter');$('btnLocal').classList.toggle('on',t==='browser');fillVoices()}
+
+$('rPause').oninput=function(){$('vPause').textContent=parseFloat(this.value).toFixed(1)+'s'};
+$('rRepeat').oninput=function(){$('vRepeat').textContent=this.value+'次'};
+$('rSpeed').oninput=function(){$('vSpeed').textContent=this.value+'x'};
+
+function splitS(t){return t.replace(/\r\n/g,'\n').replace(/\n+/g,'\n').split(/(?<=[.!?])\s+|\n/).map(s=>s.trim()).filter(s=>s.length>0)}
+
+function buildList(){const l=$('slist');l.innerHTML='';S.forEach((s,i)=>{const d=document.createElement('div');d.className='si';d.id='s'+i;d.innerHTML=`<span class="num">${i+1}</span><span class="txt">${s}</span>`;d.onclick=()=>jumpTo(i);l.appendChild(d)})}
+function upProg(){$('prog').textContent=`${ci+1} / ${S.length}`}
+function setSt(t,c){$('stxt').textContent=t;const d=$('bd');d.className='bd';if(c)d.classList.add(c)}
+function hi(i,st){document.querySelectorAll('.si').forEach(e=>{e.classList.remove('active','wait')});const e=document.getElementById('s'+i);if(e){e.classList.add(st);e.scrollIntoView({behavior:'smooth',block:'center'})}}
+function markDone(i){const e=document.getElementById('s'+i);if(e)e.classList.add('done')}
+
+function speakPuter(text){return new Promise(async(res)=>{try{const v=$('voiceSelect').value;const audio=await puter.ai.txt2speech(text,{voice:v,engine:'neural',language:'en-US'});cAudio=audio;audio.playbackRate=parseFloat($('rSpeed').value);audio.onended=()=>{cAudio=null;res()};audio.onerror=()=>{cAudio=null;res()};audio.play().catch(()=>{cAudio=null;res()})}catch(e){console.error('AI TTS:',e);cAudio=null;await speakLocal(text);res()}})}
+function speakLocal(text){return new Promise((res)=>{synth.cancel();setTimeout(()=>{const u=new SpeechSynthesisUtterance(text);const idx=$('voiceSelect').value;if(bv[idx])u.voice=bv[idx];u.rate=parseFloat($('rSpeed').value);u.pitch=1;u.onend=()=>res();u.onerror=()=>res();synth.speak(u)},100)})}
+function speak(t){return(src==='puter'&&puterOK)?speakPuter(t):speakLocal(t)}
+function wait(s){return new Promise(r=>{ptimer=setTimeout(r,s*1000)})}
+
+async function loop(){const pd=parseFloat($('rPause').value),rc=parseInt($('rRepeat').value);while(ci<S.length&&playing){while(paused&&playing)await new Promise(r=>setTimeout(r,200));if(!playing)break;for(let rep=0;rep<rc&&playing;rep++){while(paused&&playing)await new Promise(r=>setTimeout(r,200));if(!playing)break;document.querySelectorAll('.rep-tag').forEach(b=>b.remove());if(rc>1){const e=document.getElementById('s'+ci);if(e){const b=document.createElement('span');b.className='rep-tag';b.textContent=`${rep+1}/${rc}`;e.appendChild(b)}}hi(ci,'active');setSt(`朗读第 ${ci+1} 句${rc>1?` · 第${rep+1}遍`:''}`,src==='puter'?'loading':'playing');upProg();await speak(S[ci]);if(!playing)break;hi(ci,'wait');setSt('请跟读这句 ⏳','waiting');await wait(pd);if(!playing)break}if(!playing)break;document.querySelectorAll('.rep-tag').forEach(b=>b.remove());markDone(ci);ci++}if(playing&&ci>=S.length){setSt('✅ 全部完成！','');finish()}}
+
+function start(){const t=$('textInput').value.trim();if(!t)return;S=splitS(t);if(!S.length)return;ci=0;playing=true;paused=false;buildList();$('panel').classList.remove('hidden');$('btnStart').classList.add('hidden');$('btnPause').classList.remove('hidden');$('btnStop').classList.remove('hidden');loop()}
+function togglePause(){paused=!paused;if(paused){if(cAudio)cAudio.pause();if(src==='browser')synth.pause();$('btnPause').textContent='▶ 继续';setSt('已暂停','');if(ptimer)clearTimeout(ptimer)}else{if(cAudio)cAudio.play();if(src==='browser')synth.resume();$('btnPause').textContent='⏸ 暂停'}}
+function stop(){playing=false;paused=false;if(cAudio){cAudio.pause();cAudio=null}synth.cancel();if(ptimer)clearTimeout(ptimer);finish();setSt('已停止','')}
+function finish(){$('btnStart').classList.remove('hidden');$('btnStart').textContent='▶ 重新开始';$('btnPause').classList.add('hidden');$('btnStop').classList.add('hidden');$('btnPause').textContent='⏸ 暂停'}
+function jumpTo(i){if(!playing)return;if(cAudio){cAudio.pause();cAudio=null}synth.cancel();if(ptimer)clearTimeout(ptimer);ci=i;for(let j=i;j<S.length;j++){const e=document.getElementById('s'+j);if(e)e.classList.remove('done')}}
+
+fillVoices();
+</script>
+</body>
+</html>
