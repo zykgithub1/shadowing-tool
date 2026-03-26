@@ -16,7 +16,7 @@
 
 ### 在线使用（推荐）
 
-访问：`https://你的用户名.github.io/shadowecho/`
+访问：`https://zykgithub1.github.io/shadowing-tool/`
 
 ### 自己部署
 
