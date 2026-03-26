@@ -139,6 +139,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
     <div class="ctrl"><label>停顿 Pause</label><input type="range" id="rPause" min="1" max="10" step=".5" value="3"><div class="rv" id="vPause">3.0s</div></div>
     <div class="ctrl"><label>重复 Repeat</label><input type="range" id="rRepeat" min="1" max="5" step="1" value="1"><div class="rv" id="vRepeat">1次</div></div>
     <div class="ctrl"><label>语速 Speed</label><input type="range" id="rSpeed" min=".5" max="1.5" step=".1" value=".9"><div class="rv" id="vSpeed">0.9x</div></div>
+    <div class="ctrl" style="grid-column:1/-1"><label>📏 每段最多单词数 Max Words</label><input type="range" id="rMaxW" min="5" max="50" step="1" value="18"><div class="rv" id="vMaxW">18 词（超过自动分割）</div></div>
   </div>
 
   <div class="actions">
@@ -172,8 +173,74 @@ function switchTTS(t){if(t==='puter'&&!puterOK)return;src=t;$('btnAI').classList
 $('rPause').oninput=function(){$('vPause').textContent=parseFloat(this.value).toFixed(1)+'s'};
 $('rRepeat').oninput=function(){$('vRepeat').textContent=this.value+'次'};
 $('rSpeed').oninput=function(){$('vSpeed').textContent=this.value+'x'};
+$('rMaxW').oninput=function(){$('vMaxW').textContent=this.value+' 词（超过自动分割）'};
 
-function splitS(t){return t.replace(/\r\n/g,'\n').replace(/\n+/g,'\n').split(/(?<=[.!?])\s+|\n/).map(s=>s.trim()).filter(s=>s.length>0)}
+function splitS(t){
+  const maxW=parseInt($('rMaxW').value);
+  const minW=Math.max(3,Math.floor(maxW*0.35));
+  const raw=t.replace(/\r\n/g,'\n').replace(/\n+/g,'\n').split(/(?<=[.!?])\s+|\n/).map(s=>s.trim()).filter(s=>s.length>0);
+  const chunks=[];
+  raw.forEach(sent=>{
+    if(wc(sent)<=maxW){chunks.push(sent);return}
+    // try splitting by , ; : then by conjunctions
+    const pieces=splitByMarks(sent);
+    mergeChunks(pieces,maxW,minW,chunks);
+  });
+  return chunks.filter(s=>s.trim().length>0);
+}
+function wc(s){return s.trim().split(/\s+/).length}
+function splitByMarks(s){
+  // split by comma/semicolon/colon, keep delimiter attached to left part
+  return s.split(/(?<=[,;:])\s+/).reduce((arr,p)=>{
+    // further split long pieces by conjunctions
+    if(wc(p)>parseInt($('rMaxW').value)){
+      const subs=p.split(/\s+(?=(?:and|but|or|because|since|although|which|that|where|when|while|if|so|then|however|therefore|moreover|furthermore|nevertheless)\s)/i);
+      arr.push(...subs);
+    }else{arr.push(p)}
+    return arr;
+  },[]);
+}
+function mergeChunks(pieces,maxW,minW,out){
+  let buf='';
+  for(let i=0;i<pieces.length;i++){
+    const p=pieces[i];
+    const test=buf?(buf+' '+p):p;
+    if(wc(test)<=maxW){
+      buf=test;
+    }else{
+      if(buf)out.push(buf);
+      if(wc(p)<=maxW){
+        buf=p;
+      }else{
+        // force split by word count, but avoid tiny tail
+        const words=p.split(/\s+/);
+        let j=0;
+        while(j<words.length){
+          const remaining=words.length-j;
+          if(remaining<=maxW){
+            buf=words.slice(j).join(' ');j=words.length;
+          }else if(remaining<=maxW+minW){
+            // split roughly in half to avoid tiny tail
+            const half=Math.ceil(remaining/2);
+            out.push(words.slice(j,j+half).join(' '));
+            buf=words.slice(j+half).join(' ');j=words.length;
+          }else{
+            out.push(words.slice(j,j+maxW).join(' '));
+            j+=maxW;buf='';
+          }
+        }
+      }
+    }
+  }
+  if(buf){
+    // if tail is too short and we have a previous chunk, merge with it
+    if(wc(buf)<minW&&out.length>0&&wc(out[out.length-1]+' '+buf)<=maxW*1.3){
+      out[out.length-1]+=' '+buf;
+    }else{
+      out.push(buf);
+    }
+  }
+}
 
 function buildList(){const l=$('slist');l.innerHTML='';S.forEach((s,i)=>{const d=document.createElement('div');d.className='si';d.id='s'+i;d.innerHTML=`<span class="num">${i+1}</span><span class="txt">${s}</span>`;d.onclick=()=>jumpTo(i);l.appendChild(d)})}
 function upProg(){$('prog').textContent=`${ci+1} / ${S.length}`}
