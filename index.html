@@ -174,33 +174,22 @@ const TTS_API_BASE='https://tts-edge-shadowing.chriszyk123.workers.dev';
 /** 若 Worker 里配置了 API_KEY，在此填写（留空则不带 Authorization） */
 const TTS_API_KEY='';
 
-/** ===== 计数展示：起始 = KV记录 + 1234，再叠加 Vercount；KV 写库仍静默 ===== */
+/** ===== 计数展示 = 历史基数 + Vercount 实时 PV ===== */
 (function initVisitCount(){
-  const OFFSET=1234;
-  const LS_KEY='se_count_base';
+  /** 切换到 Vercount 时 Cloudflare KV 里 visits 的数字，是一次性快照，之后不再变动 */
+  const LEGACY_BASE=1234;
   const numEl=document.getElementById('ucNum');
   const vcEl=document.getElementById('vercount_value_page_pv');
-  let startBase=parseInt(localStorage.getItem(LS_KEY)||String(OFFSET),10)||OFFSET;
 
-  function render(){
-    const raw=(vcEl.textContent||'0').replace(/[^\d]/g,'');
-    const pv=parseInt(raw,10)||0;
-    numEl.textContent=(startBase+pv).toLocaleString();
-  }
-
-  // 翻墙可达时：写入 KV，并读取当前值作为起始基数（KV + 1234）
-  fetch(TTS_API_BASE+'/api/counter',{method:'POST'})
-    .then(r=>r.json())
-    .then(data=>{
-      const kv=parseInt(data&&data.count,10)||0;
-      startBase=kv+OFFSET;
-      localStorage.setItem(LS_KEY,String(startBase));
-      render();
-    })
-    .catch(()=>{});
-
+  const render=()=>{
+    const pv=parseInt((vcEl.textContent||'').replace(/\D/g,''),10)||0;
+    numEl.textContent=(LEGACY_BASE+pv).toLocaleString();
+  };
   render();
   new MutationObserver(render).observe(vcEl,{childList:true,characterData:true,subtree:true});
+
+  // KV 只做后台留档，不参与展示，否则翻墙用户会被 KV 和 Vercount 各计一次
+  fetch(TTS_API_BASE+'/api/counter',{method:'POST'}).catch(()=>{});
 })();
 
 let S=[],ci=0,playing=false,paused=false,cAudio=null,lastBlobUrl=null;
