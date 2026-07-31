@@ -117,7 +117,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
   <div class="logo"><div class="logo-icon">🎧</div><h1>Shadow<span>Echo</span></h1></div>
   <div class="subtitle-row">
     <p class="subtitle">粘贴英文 → 逐句朗读 → 停顿跟读 · 开源免费</p>
-    <div class="user-count visible" id="userCount"><span class="uc-dot"></span><span class="uc-num" id="vercount_value_page_pv">--</span> 次使用</div>
+    <div class="user-count visible" id="userCount"><span class="uc-dot"></span><span class="uc-num" id="ucNum">--</span> 次使用<span id="vercount_value_page_pv" style="display:none">0</span></div>
   </div>
 
   <div class="engine-bar checking" id="ebar"><div class="engine-dot"></div><span id="etxt">正在检测在线AI语音...</span></div>
@@ -174,9 +174,33 @@ const TTS_API_BASE='https://tts-edge-shadowing.chriszyk123.workers.dev';
 /** 若 Worker 里配置了 API_KEY，在此填写（留空则不带 Authorization） */
 const TTS_API_KEY='';
 
-/** ===== Cloudflare KV 静默计数（仅翻墙可达时写入，不展示） ===== */
-(function silentCfCounter(){
-  fetch(TTS_API_BASE+'/api/counter',{method:'POST'}).catch(()=>{});
+/** ===== 计数展示：起始 = KV记录 + 1234，再叠加 Vercount；KV 写库仍静默 ===== */
+(function initVisitCount(){
+  const OFFSET=1234;
+  const LS_KEY='se_count_base';
+  const numEl=document.getElementById('ucNum');
+  const vcEl=document.getElementById('vercount_value_page_pv');
+  let startBase=parseInt(localStorage.getItem(LS_KEY)||String(OFFSET),10)||OFFSET;
+
+  function render(){
+    const raw=(vcEl.textContent||'0').replace(/[^\d]/g,'');
+    const pv=parseInt(raw,10)||0;
+    numEl.textContent=(startBase+pv).toLocaleString();
+  }
+
+  // 翻墙可达时：写入 KV，并读取当前值作为起始基数（KV + 1234）
+  fetch(TTS_API_BASE+'/api/counter',{method:'POST'})
+    .then(r=>r.json())
+    .then(data=>{
+      const kv=parseInt(data&&data.count,10)||0;
+      startBase=kv+OFFSET;
+      localStorage.setItem(LS_KEY,String(startBase));
+      render();
+    })
+    .catch(()=>{});
+
+  render();
+  new MutationObserver(render).observe(vcEl,{childList:true,characterData:true,subtree:true});
 })();
 
 let S=[],ci=0,playing=false,paused=false,cAudio=null,lastBlobUrl=null;
