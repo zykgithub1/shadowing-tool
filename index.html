@@ -117,7 +117,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
   <div class="logo"><div class="logo-icon">🎧</div><h1>Shadow<span>Echo</span></h1></div>
   <div class="subtitle-row">
     <p class="subtitle">粘贴英文 → 逐句朗读 → 停顿跟读 · 开源免费</p>
-    <div class="user-count" id="userCount"><span class="uc-dot"></span><span class="uc-num" id="ucNum">--</span> 人已使用</div>
+    <div class="user-count visible" id="userCount"><span class="uc-dot"></span><span class="uc-num" id="busuanzi_site_pv">--</span> 次使用</div>
   </div>
 
   <div class="engine-bar checking" id="ebar"><div class="engine-dot"></div><span id="etxt">正在检测在线AI语音...</span></div>
@@ -165,24 +165,18 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 
 <div class="bar"><div class="bd" id="bd"></div><span id="stxt">准备就绪</span></div>
 
+<!-- Vercount：页面展示用（中国加速，每次打开 site_pv +1） -->
+<script defer src="https://cn.vercount.one/js"></script>
+
 <script>
 /** 你的 Cloudflare Worker 根地址（不要末尾斜杠） */
 const TTS_API_BASE='https://tts-edge-shadowing.chriszyk123.workers.dev';
 /** 若 Worker 里配置了 API_KEY，在此填写（留空则不带 Authorization） */
 const TTS_API_KEY='';
 
-/** ===== 用户计数器（调用 Worker /api/counter） ===== */
-(async function initUserCounter(){
-  const numEl=document.getElementById('ucNum');
-  const wrapEl=document.getElementById('userCount');
-  try{
-    const r=await fetch(TTS_API_BASE+'/api/counter',{method:'POST'});
-    const data=await r.json();
-    numEl.textContent=data.count.toLocaleString();
-  }catch(e){
-    numEl.textContent='1,234';
-  }
-  wrapEl.classList.add('visible');
+/** ===== Cloudflare KV 静默计数（仅翻墙可达时写入，不展示） ===== */
+(function silentCfCounter(){
+  fetch(TTS_API_BASE+'/api/counter',{method:'POST'}).catch(()=>{});
 })();
 
 let S=[],ci=0,playing=false,paused=false,cAudio=null,lastBlobUrl=null;
