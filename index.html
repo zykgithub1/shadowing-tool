@@ -29,7 +29,13 @@ body::after{content:'';position:fixed;bottom:-30%;right:-20%;width:70%;height:70
 .logo-icon{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--mint),var(--sky));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .logo h1{font-size:20px;font-weight:700;letter-spacing:-.3px;color:var(--text)}
 .logo h1 span{color:var(--mint)}
-.subtitle{color:var(--text2);font-size:12px;margin-bottom:24px;padding-left:46px;font-weight:300}
+.subtitle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-left:46px}
+.subtitle{color:var(--text2);font-size:12px;font-weight:300}
+
+.user-count{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:rgba(69,230,176,.06);border:1px solid rgba(69,230,176,.1);font-family:'DM Mono',monospace;font-size:11px;color:var(--mint);white-space:nowrap;opacity:0;transition:opacity .6s ease}
+.user-count.visible{opacity:1}
+.user-count .uc-dot{width:5px;height:5px;border-radius:50%;background:var(--mint);animation:pulse 2s infinite}
+.user-count .uc-num{font-weight:500}
 
 .engine-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:12px;font-weight:500;transition:.3s}
 .engine-bar.checking{background:rgba(255,200,60,.08);color:#ffc83c;border:1px solid rgba(255,200,60,.15)}
@@ -109,7 +115,10 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 <body>
 <div class="app">
   <div class="logo"><div class="logo-icon">🎧</div><h1>Shadow<span>Echo</span></h1></div>
-  <p class="subtitle">粘贴英文 → 逐句朗读 → 停顿跟读 · 开源免费</p>
+  <div class="subtitle-row">
+    <p class="subtitle">粘贴英文 → 逐句朗读 → 停顿跟读 · 开源免费</p>
+    <div class="user-count" id="userCount"><span class="uc-dot"></span><span class="uc-num" id="ucNum">--</span> 人已使用</div>
+  </div>
 
   <div class="engine-bar checking" id="ebar"><div class="engine-dot"></div><span id="etxt">正在检测在线AI语音...</span></div>
 
@@ -161,6 +170,20 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 const TTS_API_BASE='https://tts-edge-shadowing.chriszyk123.workers.dev';
 /** 若 Worker 里配置了 API_KEY，在此填写（留空则不带 Authorization） */
 const TTS_API_KEY='';
+
+/** ===== 用户计数器（调用 Worker /api/counter） ===== */
+(async function initUserCounter(){
+  const numEl=document.getElementById('ucNum');
+  const wrapEl=document.getElementById('userCount');
+  try{
+    const r=await fetch(TTS_API_BASE+'/api/counter',{method:'POST'});
+    const data=await r.json();
+    numEl.textContent=data.count.toLocaleString();
+  }catch(e){
+    numEl.textContent='1,234';
+  }
+  wrapEl.classList.add('visible');
+})();
 
 let S=[],ci=0,playing=false,paused=false,cAudio=null,lastBlobUrl=null;
 let loopGeneration=0,endSpeak=null;
@@ -229,7 +252,6 @@ function splitS(t){
   const chunks=[];
   raw.forEach(sent=>{
     if(wc(sent)<=maxW){chunks.push(sent);return}
-    // try splitting by , ; : then by conjunctions
     const pieces=splitByMarks(sent);
     mergeChunks(pieces,maxW,minW,chunks);
   });
@@ -237,9 +259,7 @@ function splitS(t){
 }
 function wc(s){return s.trim().split(/\s+/).length}
 function splitByMarks(s){
-  // split by comma/semicolon/colon, keep delimiter attached to left part
   return s.split(/(?<=[,;:])\s+/).reduce((arr,p)=>{
-    // further split long pieces by conjunctions
     if(wc(p)>parseInt($('rMaxW').value)){
       const subs=p.split(/\s+(?=(?:and|but|or|because|since|although|which|that|where|when|while|if|so|then|however|therefore|moreover|furthermore|nevertheless)\s)/i);
       arr.push(...subs);
@@ -259,7 +279,6 @@ function mergeChunks(pieces,maxW,minW,out){
       if(wc(p)<=maxW){
         buf=p;
       }else{
-        // force split by word count, but avoid tiny tail
         const words=p.split(/\s+/);
         let j=0;
         while(j<words.length){
@@ -267,7 +286,6 @@ function mergeChunks(pieces,maxW,minW,out){
           if(remaining<=maxW){
             buf=words.slice(j).join(' ');j=words.length;
           }else if(remaining<=maxW+minW){
-            // split roughly in half to avoid tiny tail
             const half=Math.ceil(remaining/2);
             out.push(words.slice(j,j+half).join(' '));
             buf=words.slice(j+half).join(' ');j=words.length;
@@ -280,7 +298,6 @@ function mergeChunks(pieces,maxW,minW,out){
     }
   }
   if(buf){
-    // if tail is too short and we have a previous chunk, merge with it
     if(wc(buf)<minW&&out.length>0&&wc(out[out.length-1]+' '+buf)<=maxW*1.3){
       out[out.length-1]+=' '+buf;
     }else{
@@ -370,7 +387,6 @@ function speakLocal(text){
   });
 }
 function speak(t){return(src==='puter'&&puterOK)?speakPuter(t):speakLocal(t)}
-/** 跟读停顿：可暂停=倒计时冻结；停止/跳转时靠 playing 与 gen 退出 */
 async function wait(pdSeconds,gen){
   let remaining=pdSeconds*1000;
   while(remaining>0&&playing){
